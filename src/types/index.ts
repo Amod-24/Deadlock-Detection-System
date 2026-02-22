@@ -14,3 +14,13 @@ export interface DetectionResult {
     safeSequence: number[];
     message: string;
 }
+
+/** Info for each step in Banker's algorithm */
+export interface StepInfo {
+    stepNumber: number;
+    selectedProcess: number | null;
+    work: number[];
+    finish: boolean[];
+    safeSequenceSoFar: number[];
+    explanation: string;
+}
