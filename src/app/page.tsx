@@ -1,6 +1,28 @@
+"use client";
+
+import { useState } from "react";
+import { SystemState, DetectionResult } from "@/types";
+import { detectDeadlock } from "@/lib/deadlockDetector";
 import ConfigForm from "@/components/ConfigForm";
+import ResultDisplay from "@/components/ResultDisplay";
+import RAGGraph from "@/components/RAGGraph";
+import SummaryTable from "@/components/SummaryTable";
 
 export default function Home() {
+  const [systemState, setSystemState] = useState<SystemState | null>(null);
+  const [detectionResult, setDetectionResult] = useState<DetectionResult | null>(null);
+
+  const handleDetect = (state: SystemState) => {
+    setSystemState(state);
+    const result = detectDeadlock(state);
+    setDetectionResult(result);
+  };
+
+  const handleReset = () => {
+    setSystemState(null);
+    setDetectionResult(null);
+  };
+
   return (
     <main className="min-h-screen bg-background text-foreground">
       {/* ── Hero header ─────────────────────────────────────── */}
@@ -13,10 +35,52 @@ export default function Home() {
         </p>
       </header>
 
-      {/* ── Config form ─────────────────────────────────────── */}
-      <div className="px-4 pb-20">
-        <ConfigForm />
+      {/* ── Config form (top) ───────────────────────────────── */}
+      <div className="px-4">
+        <ConfigForm
+          onDetect={handleDetect}
+          onReset={handleReset}
+          hasResult={detectionResult !== null}
+        />
       </div>
+
+      {/* ── Detection Results ───────────────────────────────── */}
+      {detectionResult && systemState && (
+        <div className="px-4 mt-12 max-w-5xl mx-auto space-y-10 animate-[fadeSlideIn_0.4s_ease-out]">
+          {/* Section heading */}
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-surface-border" />
+            <h2 className="text-lg font-semibold text-foreground/60 tracking-wide uppercase">
+              Detection Results
+            </h2>
+            <div className="h-px flex-1 bg-surface-border" />
+          </div>
+
+          {/* Result banner */}
+          <ResultDisplay result={detectionResult} />
+
+          {/* Graph (left) + Summary Table (right) */}
+          <div className="flex flex-col lg:flex-row gap-8">
+            {/* RAG Graph */}
+            <div className="flex-1 min-w-0">
+              <RAGGraph state={systemState} />
+            </div>
+
+            {/* Summary Table */}
+            <div className="flex-1 min-w-0">
+              <div className="bg-surface/60 backdrop-blur-md border border-surface-border rounded-2xl p-6 shadow-xl space-y-4">
+                <h2 className="text-xl font-semibold tracking-tight">
+                  Process Summary
+                </h2>
+                <SummaryTable state={systemState} result={detectionResult} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Footer spacer ───────────────────────────────────── */}
+      <div className="pb-20" />
     </main>
   );
 }
