@@ -1,4 +1,4 @@
-import { SystemState, DetectionResult } from "@/types";
+import { SystemState, DetectionResult, StepInfo } from "@/types";
 
 /**
  * Build a wait-for graph for single-instance resources.
@@ -174,4 +174,97 @@ export function detectDeadlock(state: SystemState): DetectionResult {
         return detectSingleInstance(state);
     }
     return detectMultiInstance(state);
+}
+
+/**
+ * Step-by-step Banker's algorithm for visualization.
+ */
+export function detectMultiInstanceStepByStep(state: SystemState): StepInfo[] {
+    const { numProcesses, numResources, available, allocation, request } = state;
+    const steps: StepInfo[] = [];
+
+    const work = [...available];
+    const finish = new Array(numProcesses).fill(false);
+    const safeSequence: number[] = [];
+    let stepNumber = 1;
+
+    // Initial state
+    steps.push({
+        stepNumber: stepNumber++,
+        selectedProcess: null,
+        work: [...work],
+        finish: [...finish],
+        safeSequenceSoFar: [...safeSequence],
+        explanation: `Initial state. Work (Available) = [${work.join(", ")}], Finish = [${finish.map(f => f ? "T" : "F").join(", ")}]`,
+    });
+
+    let found = true;
+    while (found) {
+        found = false;
+        for (let i = 0; i < numProcesses; i++) {
+            if (!finish[i]) {
+                steps.push({
+                    stepNumber: stepNumber++,
+                    selectedProcess: i,
+                    work: [...work],
+                    finish: [...finish],
+                    safeSequenceSoFar: [...safeSequence],
+                    explanation: `Checking P${i}... Finish[${i}] is false. Need [${request[i].join(", ")}], Work is [${work.join(", ")}].`,
+                });
+
+                if (isLessOrEqual(request[i], work)) {
+                    const prevWork = [...work];
+                    for (let j = 0; j < numResources; j++) {
+                        work[j] += allocation[i][j];
+                    }
+                    finish[i] = true;
+                    safeSequence.push(i);
+                    found = true;
+
+                    steps.push({
+                        stepNumber: stepNumber++,
+                        selectedProcess: i,
+                        work: [...work],
+                        finish: [...finish],
+                        safeSequenceSoFar: [...safeSequence],
+                        explanation: `P${i} can finish! Request ≤ Work. Releasing allocated resources [${allocation[i].join(", ")}]. Work becomes [${prevWork.join(", ")}] + [${allocation[i].join(", ")}] = [${work.join(", ")}].`,
+                    });
+                    // In strict Banker's, some implementations break to rescan from start, but we continue checking next processes to save steps
+                } else {
+                    steps.push({
+                        stepNumber: stepNumber++,
+                        selectedProcess: i,
+                        work: [...work],
+                        finish: [...finish],
+                        safeSequenceSoFar: [...safeSequence],
+                        explanation: `P${i} cannot finish. Need [${request[i].join(", ")}] > Work [${work.join(", ")}]. Skipping P${i} for now.`,
+                    });
+                }
+            }
+        }
+    }
+
+    const deadlocked = finish.map((f, i) => (!f ? i : -1)).filter((i) => i !== -1);
+
+    if (deadlocked.length > 0) {
+        steps.push({
+            stepNumber: stepNumber++,
+            selectedProcess: null,
+            work: [...work],
+            finish: [...finish],
+            safeSequenceSoFar: [...safeSequence],
+            explanation: `Algorithm terminated. Deadlock detected! Processes ${deadlocked.map((p) => `P${p}`).join(", ")} cannot proceed.`,
+        });
+    } else {
+        steps.push({
+            stepNumber: stepNumber++,
+            selectedProcess: null,
+            work: [...work],
+            finish: [...finish],
+            safeSequenceSoFar: [...safeSequence],
+            explanation: `Algorithm terminated. System is safe! Safe sequence: ${safeSequence.map(p => `P${p}`).join(" → ")}.`,
+        });
+    }
+
+    return steps;
 }

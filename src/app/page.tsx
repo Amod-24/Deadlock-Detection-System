@@ -1,26 +1,31 @@
 "use client";
 
 import { useState } from "react";
-import { SystemState, DetectionResult } from "@/types";
-import { detectDeadlock } from "@/lib/deadlockDetector";
+import { SystemState, DetectionResult, StepInfo } from "@/types";
+import { detectDeadlock, detectMultiInstanceStepByStep } from "@/lib/deadlockDetector";
 import ConfigForm from "@/components/ConfigForm";
 import ResultDisplay from "@/components/ResultDisplay";
 import RAGGraph from "@/components/RAGGraph";
 import SummaryTable from "@/components/SummaryTable";
+import StepByStep from "@/components/StepByStep";
 
 export default function Home() {
   const [systemState, setSystemState] = useState<SystemState | null>(null);
   const [detectionResult, setDetectionResult] = useState<DetectionResult | null>(null);
+  const [steps, setSteps] = useState<StepInfo[] | null>(null);
 
   const handleDetect = (state: SystemState) => {
     setSystemState(state);
     const result = detectDeadlock(state);
     setDetectionResult(result);
+    // Generate step-by-step trace regardless of outcome
+    setSteps(detectMultiInstanceStepByStep(state));
   };
 
   const handleReset = () => {
     setSystemState(null);
     setDetectionResult(null);
+    setSteps(null);
   };
 
   return (
@@ -76,6 +81,13 @@ export default function Home() {
               </div>
             </div>
           </div>
+
+          {/* Step By Step Visualization */}
+          {steps && steps.length > 0 && (
+            <div className="mt-12 animate-[fadeSlideIn_0.4s_ease-out_0.2s] fill-mode-both">
+              <StepByStep steps={steps} />
+            </div>
+          )}
         </div>
       )}
 
