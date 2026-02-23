@@ -1,4 +1,4 @@
-import { SystemState, DetectionResult, StepInfo } from "@/types";
+import { SystemState, DetectionResult, StepInfo, ResolveResult } from "@/types";
 
 /**
  * Build a wait-for graph for single-instance resources.
@@ -268,3 +268,60 @@ export function detectMultiInstanceStepByStep(state: SystemState): StepInfo[] {
 
     return steps;
 }
+
+/**
+ * Resolve a deadlock by terminating a victim process.
+ *
+ * If `victimIndex` is provided, that process is killed.
+ * Otherwise, the deadlocked process with the smallest total allocation is chosen (min-cost heuristic).
+ *
+ * The victim's allocated resources are released (added back to available),
+ * and its allocation & request rows are zeroed out.
+ * Detection is then re-run on the modified state.
+ */
+export function resolveDeadlock(
+    state: SystemState,
+    deadlockedProcesses: number[],
+    victimIndex?: number
+): ResolveResult {
+    // Pick victim
+    let victim: number;
+    if (victimIndex !== undefined && deadlockedProcesses.includes(victimIndex)) {
+        victim = victimIndex;
+    } else {
+        // auto: pick the process with the smallest total allocation
+        victim = deadlockedProcesses.reduce((best, p) => {
+            const sumP = state.allocation[p].reduce((a, b) => a + b, 0);
+            const sumBest = state.allocation[best].reduce((a, b) => a + b, 0);
+            return sumP < sumBest ? p : best;
+        }, deadlockedProcesses[0]);
+    }
+
+    // Deep copy state
+    const newAvailable = [...state.available];
+    const newAllocation = state.allocation.map((r) => [...r]);
+    const newRequest = state.request.map((r) => [...r]);
+
+    // Release victim's resources
+    for (let j = 0; j < state.numResources; j++) {
+        newAvailable[j] += newAllocation[victim][j];
+        newAllocation[victim][j] = 0;
+        newRequest[victim][j] = 0;
+    }
+
+    const newState: SystemState = {
+        numProcesses: state.numProcesses,
+        numResources: state.numResources,
+        available: newAvailable,
+        allocation: newAllocation,
+        request: newRequest,
+    };
+
+    const newResult = detectDeadlock(newState);
+
+    const releasedResources = state.allocation[victim];
+    const message = `Terminated P${victim} (released [${releasedResources.join(", ")}]). ${newResult.message}`;
+
+    return { newState, newResult, victimProcess: victim, message };
+}
+

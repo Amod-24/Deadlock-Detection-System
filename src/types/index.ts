@@ -24,3 +24,11 @@ export interface StepInfo {
     safeSequenceSoFar: number[];
     explanation: string;
 }
+
+/** Result returned by deadlock resolution */
+export interface ResolveResult {
+    newState: SystemState;
+    newResult: DetectionResult;
+    victimProcess: number;
+    message: string;
+}

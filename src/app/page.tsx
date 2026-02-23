@@ -1,19 +1,26 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { SystemState, DetectionResult, StepInfo } from "@/types";
+import { SystemState, DetectionResult, StepInfo, ResolveResult } from "@/types";
 import { detectDeadlock, detectMultiInstanceStepByStep } from "@/lib/deadlockDetector";
 import ConfigForm from "@/components/ConfigForm";
 import ResultDisplay from "@/components/ResultDisplay";
 import RAGGraph, { StepState } from "@/components/RAGGraph";
 import SummaryTable from "@/components/SummaryTable";
 import StepByStep from "@/components/StepByStep";
+import SampleLoader from "@/components/SampleLoader";
+import ResolvePanel from "@/components/ResolvePanel";
 
 export default function Home() {
   const [systemState, setSystemState] = useState<SystemState | null>(null);
   const [detectionResult, setDetectionResult] = useState<DetectionResult | null>(null);
   const [steps, setSteps] = useState<StepInfo[] | null>(null);
   const [stepState, setStepState] = useState<StepState | null>(null);
+
+  /** State pushed down to ConfigForm to populate its fields externally */
+  const [externalState, setExternalState] = useState<SystemState | null>(null);
+
+  /* ── Detection ────────────────────────────────────────── */
 
   const handleDetect = (state: SystemState) => {
     setSystemState(state);
@@ -23,12 +30,17 @@ export default function Home() {
     setStepState(null);
   };
 
+  /* ── Reset ────────────────────────────────────────────── */
+
   const handleReset = () => {
     setSystemState(null);
     setDetectionResult(null);
     setSteps(null);
     setStepState(null);
+    setExternalState(null);
   };
+
+  /* ── Step-by-step callback ────────────────────────────── */
 
   const handleStepChange = useCallback(
     (currentProcess: number | null, finishedProcesses: boolean[]) => {
@@ -36,6 +48,30 @@ export default function Home() {
     },
     []
   );
+
+  /* ── Sample scenario loading ──────────────────────────── */
+
+  const handleLoadScenario = (state: SystemState) => {
+    // Push into ConfigForm via external state
+    setExternalState(state);
+    // Clear previous results
+    setSystemState(null);
+    setDetectionResult(null);
+    setSteps(null);
+    setStepState(null);
+  };
+
+  /* ── Deadlock resolution ──────────────────────────────── */
+
+  const handleResolved = (resolve: ResolveResult) => {
+    // Update everything with the new (post-resolution) state
+    setSystemState(resolve.newState);
+    setDetectionResult(resolve.newResult);
+    setSteps(detectMultiInstanceStepByStep(resolve.newState));
+    setStepState(null);
+    // Also push the new state into ConfigForm so the tables update
+    setExternalState(resolve.newState);
+  };
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -49,12 +85,18 @@ export default function Home() {
         </p>
       </header>
 
+      {/* ── Sample scenarios ────────────────────────────────── */}
+      <div className="px-4 max-w-5xl mx-auto mb-8">
+        <SampleLoader onLoad={handleLoadScenario} />
+      </div>
+
       {/* ── Config form (top) ───────────────────────────────── */}
       <div className="px-4">
         <ConfigForm
           onDetect={handleDetect}
           onReset={handleReset}
           hasResult={detectionResult !== null}
+          externalState={externalState}
         />
       </div>
 
@@ -72,6 +114,15 @@ export default function Home() {
 
           {/* Result banner */}
           <ResultDisplay result={detectionResult} />
+
+          {/* Resolve panel (only shown on deadlock) */}
+          {detectionResult.isDeadlocked && (
+            <ResolvePanel
+              state={systemState}
+              result={detectionResult}
+              onResolved={handleResolved}
+            />
+          )}
 
           {/* Graph (left) + Summary Table (right) */}
           <div className="flex flex-col lg:flex-row gap-8">
