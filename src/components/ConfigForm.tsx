@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { SystemState } from "@/types";
 
 interface ConfigFormProps {
     onDetect: (state: SystemState) => void;
     onReset: () => void;
     hasResult: boolean;
+    /** When set externally (e.g. from SampleLoader or ResolvePanel), populates the form */
+    externalState?: SystemState | null;
 }
 
-export default function ConfigForm({ onDetect, onReset, hasResult }: ConfigFormProps) {
+export default function ConfigForm({ onDetect, onReset, hasResult, externalState }: ConfigFormProps) {
     const [numProcesses, setNumProcesses] = useState<number>(3);
     const [numResources, setNumResources] = useState<number>(3);
 
@@ -18,6 +20,21 @@ export default function ConfigForm({ onDetect, onReset, hasResult }: ConfigFormP
     const [request, setRequest] = useState<number[][]>([]);
 
     const [tablesGenerated, setTablesGenerated] = useState(false);
+
+    // Track the last loaded external state to avoid infinite loops
+    const lastExternalRef = useRef<SystemState | null>(null);
+
+    useEffect(() => {
+        if (externalState && externalState !== lastExternalRef.current) {
+            lastExternalRef.current = externalState;
+            setNumProcesses(externalState.numProcesses);
+            setNumResources(externalState.numResources);
+            setAvailable([...externalState.available]);
+            setAllocation(externalState.allocation.map((r) => [...r]));
+            setRequest(externalState.request.map((r) => [...r]));
+            setTablesGenerated(true);
+        }
+    }, [externalState]);
 
     /* -------- handlers -------- */
 
@@ -51,6 +68,7 @@ export default function ConfigForm({ onDetect, onReset, hasResult }: ConfigFormP
         setAllocation([]);
         setRequest([]);
         setTablesGenerated(false);
+        lastExternalRef.current = null;
         onReset();
     };
 
