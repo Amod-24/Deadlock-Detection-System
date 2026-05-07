@@ -10,7 +10,7 @@ interface ConfigFormProps {
     externalState?: SystemState | null;
     showToast?: (message: string, type: "success" | "error" | "info") => void;
 }
-
+// testing
 export default function ConfigForm({ onDetect, onReset, hasResult, externalState, showToast }: ConfigFormProps) {
     const [numProcesses, setNumProcesses] = useState<number>(3);
     const [numResources, setNumResources] = useState<number>(3);
